@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-    Copies Azure V2 (ARM) resources from one Azure Subscription to another.  
-    Unlike the Move-AzureRMresource cmdlet, this script allows you to move between subscriptions in different Tenants and 
-    different Azure Environments. Requires AzureRM module version 6.7 or later.
+    Copies Az V2 (ARM) resources from one Az Subscription to another.  
+    Unlike the Move-Azresource cmdlet, this script allows you to move between subscriptions in different Tenants and 
+    different Az Environments. Requires Az module version 6.7 or later.
     
 .DESCRIPTION
    Copies configurations of a resource group in one subscription and provisions them in the target subscription.
-   This is intended mostly for Azure V2 virtual machines and will include copying virtual disks, virtual
+   This is intended mostly for Az V2 virtual machines and will include copying virtual disks, virtual
    network, load balancers, Public IPs and other associated storage accounts and blob files.
 
    The VHD copies can take several hours depending on how many and the sizes so the script can be executed in two parts.  
@@ -20,33 +20,33 @@
 
 
 .EXAMPLE
-   .\Copy-AzureRMresourceGroup.ps1 -ResourceGroupName 'CONTOSO'
+   .\Copy-AzresourceGroup.ps1 -ResourceGroupName 'CONTOSO'
 
 Using the script without explicitly specifying OptionalSourceEnvironment or OptionalTargetEnvrionment will result in prompts for these.  
-Press <Enter> to accept the default environment of AzureCloud.
+Press <Enter> to accept the default environment of AzCloud.
 
 .EXAMPLE
-   .\Copy-AzureRMresourceGroup.ps1 -ResourceGroupName 'CONTOSO'  -Resume
+   .\Copy-AzresourceGroup.ps1 -ResourceGroupName 'CONTOSO'  -Resume
 
-Resumes the script after waitig for the blob copy to complete.  Press <Enter> to accept the default source and target environments of AzureCloud.
+Resumes the script after waitig for the blob copy to complete.  Press <Enter> to accept the default source and target environments of AzCloud.
 
 .EXAMPLE
-   .\Copy-AzureRMresourceGroup.ps1 -ResourceGroupName 'CONTOSO' -OptionalNewLocation 'westus'
+   .\Copy-AzresourceGroup.ps1 -ResourceGroupName 'CONTOSO' -OptionalNewLocation 'westus'
 
 Specify -newLocation if the target resource group needs to be in a different region than the source
-Press <Enter> to accept the default environment of AzureCloud.
+Press <Enter> to accept the default environment of AzCloud.
 
 
 .EXAMPLE
-   .\Copy-AzureRMresourceGroup.ps1 -ResourceGroupName 'CONTOSO' -OptionalTargetEnvironment 'AzureGermanCloud' 
+   .\Copy-AzresourceGroup.ps1 -ResourceGroupName 'CONTOSO' -OptionalTargetEnvironment 'AzGermanCloud' 
 
-Copies Resource Group CONTOSO from Azure Cloud to Azure German Cloud.  Press <Enter> at prompt for OptionalSourceEnvironment
+Copies Resource Group CONTOSO from Az Cloud to Az German Cloud.  Press <Enter> at prompt for OptionalSourceEnvironment
 
 
 .EXAMPLE
-   .\Copy-AzureRMresourceGroup.ps1 -ResourceGroupName 'CONTOSO' -OptionalSourceEnvironment 'AzureUSGovernment'  -OptionalTargetEnvironment 'AzureUSGovernment' 
+   .\Copy-AzresourceGroup.ps1 -ResourceGroupName 'CONTOSO' -OptionalSourceEnvironment 'AzUSGovernment'  -OptionalTargetEnvironment 'AzUSGovernment' 
 
-Copies Resource Group CONTOSO from Azure Government to Azure Government
+Copies Resource Group CONTOSO from Az Government to Az Government
 
 
 
@@ -54,13 +54,13 @@ Copies Resource Group CONTOSO from Azure Government to Azure Government
   Name of resource group being copied
 
 .PARAMETER -OptionalSourceEnvironment [string]
-  Name of the source Environment. e.g. AzureUSGovernment, AzureGermanCloud or AzureChinaCloud. Defaults to AzureCloud.
+  Name of the source Environment. e.g. AzUSGovernment, AzGermanCloud or AzChinaCloud. Defaults to AzCloud.
 
 .PARAMETER -OptionalTargetEnvironment [string]
-  Name of the target Environment. e.g. AzureUSGovernment, AzureGermanCloud or AzureChinaCloud. Defaults to AzureCloud.
+  Name of the target Environment. e.g. AzUSGovernment, AzGermanCloud or AzChinaCloud. Defaults to AzCloud.
 
 .PARAMETER -OptionalNewLocation [string]
-  Name of the Azure location for new resource group if different than the source.
+  Name of the Az location for new resource group if different than the source.
 
 .PARAMETER -Resume [switch]
   Resumes after the file copy
@@ -79,22 +79,22 @@ Copies Resource Group CONTOSO from Azure Government to Azure Government
  obligations or liability for any sample application or script files.
  ------------------------------------------------------------------------
 #>
-#Requires -Version 4.0
+#Requires -Version 7.0
 
 
 param(
 
     [Parameter(mandatory=$True,
-      HelpMessage="Enter the name of the Azure Resource Group you want to copy and Press <Enter> e.g. CONTOSO")]
+      HelpMessage="Enter the name of the Az Resource Group you want to copy and Press <Enter> e.g. CONTOSO")]
     [string]$ResourceGroupName,
 
     [Parameter(mandatory=$True,
-      HelpMessage="Press <Enter> to default to AzureCloud or enter the Azure Environment name of the source subscription. e.g. AzureUSGovernment")]
+      HelpMessage="Press <Enter> to default to AzCloud or enter the Az Environment name of the source subscription. e.g. AzUSGovernment")]
     [AllowEmptyString()]
     [string]$OptionalSourceEnvironment,
     
     [Parameter(mandatory=$True,
-      HelpMessage="Press <Enter> to default to AzureCloud or enter the Azure Environment name of the target subscription. e.g. AzureGermanCloud")]
+      HelpMessage="Press <Enter> to default to AzCloud or enter the Az Environment name of the target subscription. e.g. AzGermanCloud")]
     [AllowEmptyString()]
     [string]$OptionalTargetEnvironment,
 
@@ -117,12 +117,7 @@ $VHDstorageObjectsResumePath = "$env:TEMP\$resourcegroupname.VHDstorageObjects.r
 $jsonBackupPath = "$env:TEMP\$resourcegroupname.json"
 $ProgressPreference = 'SilentlyContinue'
 
-import-module AzureRM 
-
-if ((Get-Module AzureRM).Version -lt "6.7.0") {
-   Write-warning "Old version of Azure PowerShell module  $((Get-Module AzureRM).Version.ToString()) detected.  Minimum of 6.7 required. Run Update-Module AzureRM"
-   BREAK
-}
+#Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force
 
 
 <###############################
@@ -141,12 +136,12 @@ function Get-StorageObject
     $PSobjSourceStorage | Add-Member -MemberType NoteProperty -Name srcURI -Value $srcURI
     $PSobjSourceStorage | Add-Member -MemberType NoteProperty -Name srcName -Value $srcName
     # retrieve storage account key and storage context
-    $StorageAccountKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $resourceGroupName -Name $StorageAccountName).Value[0]
-    $StorageContext = New-AzureStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
+    $StorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $resourceGroupName -Name $StorageAccountName).Value[0]
+    $StorageContext = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
     # add storage context to psObject
     $PSobjSourceStorage | Add-Member -MemberType NoteProperty -Name SrcStorageContext -Value $StorageContext 
     # get storage account and add other attributes to psCustom object
-    $storageAccount = Get-AzureRmStorageAccount -ResourceGroupName $resourceGroupName -Name $storageAccountName
+    $storageAccount = Get-AzStorageAccount -ResourceGroupName $resourceGroupName -Name $storageAccountName
     $PSobjSourceStorage | Add-Member -MemberType NoteProperty -Name SrcStorageEncryption -Value $storageAccount.Encryption
     $PSobjSourceStorage | Add-Member -MemberType NoteProperty -Name SrcStorageCustomDomain -Value $storageAccount.CustomDomain
     $PSobjSourceStorage | Add-Member -MemberType NoteProperty -Name SrcStorageKind -Value $storageAccount.Kind
@@ -178,7 +173,7 @@ function Get-StorageObject
 function get-availableResources
 { param($resourceType, $location)
 
-    $resource = Get-AzureRmVMUsage -Location $location | Where-Object{$_.Name.value -eq $resourceType}
+    $resource = Get-AzVMUsage -Location $location | Where-Object{$_.Name.value -eq $resourceType}
     [int32]$availabe = $resource.limit - $resource.currentvalue
     return $availabe 
 
@@ -192,17 +187,17 @@ function Get-BlobCopyStatus
     if($blobName)
     {
         write-verbose "Checking VHD blob copy for $blobName" -verbose
-        $blob = Get-AzureStorageBlob -Context $context -container $containerName -Blob $blobName
+        $blob = Get-AzStorageBlob -Context $context -container $containerName -Blob $blobName
     }
     else
     {
         write-verbose "Checking VHD blob copy for container $containerName" -verbose 
-        $blob = Get-AzureStorageBlob -Context $context -container $containerName 
+        $blob = Get-AzStorageBlob -Context $context -container $containerName 
     }
 
     do
     {
-        $rtn = $blob | Get-AzureStorageBlobCopyState
+        $rtn = $blob | Get-AzStorageBlobCopyState
         $rtn | Select-Object Source, Status, BytesCopied, TotalBytes | Format-List
         if($rtn.status  -ne 'Success')
         {
@@ -225,7 +220,7 @@ function Get-BlobCopyStatus
 <###############################
   Copy blob function
 ################################>
-function copy-azureBlob 
+function copy-AzBlob 
 {  param($srcUri, $srcContext, $destContext, $containerName)
 
 
@@ -255,11 +250,11 @@ function copy-azureBlob
     
     
    # create container if doesn't exist    
-    if (!(Get-AzureStorageContainer -Context $destContext -Name $containerName -ea SilentlyContinue)) 
+    if (!(Get-AzStorageContainer -Context $destContext -Name $containerName -ea SilentlyContinue)) 
     { 
          try
          {
-            $newRtn = New-AzureStorageContainer -Context $destContext -Name $containerName -Permission Off -ea Stop 
+            $newRtn = New-AzStorageContainer -Context $destContext -Name $containerName -Permission Off -ea Stop 
             Write-Output "Container $($newRtn.name) was created." 
          }
          catch
@@ -271,7 +266,7 @@ function copy-azureBlob
 
    try 
    {
-        $blobCopy = Start-AzureStorageBlobCopy -ea Stop `
+        $blobCopy = Start-AzStorageBlobCopy -ea Stop `
             -srcUri $srcUri `
             -SrcContext $srcContext `
             -DestContainer $containerName `
@@ -287,7 +282,7 @@ function copy-azureBlob
    }
   
 
-} # end of copy-azureBlob function
+} # end of copy-AzBlob function
 
 
 if(! $resume){
@@ -299,33 +294,33 @@ if(! $resume){
 ################################>
 
 # Verify specified Environment
-if($OptionalSourceEnvironment -and (Get-AzureRMEnvironment -Name $OptionalSourceEnvironment) -eq $null)
+if($OptionalSourceEnvironment -and (Get-AzEnvironment -Name $OptionalSourceEnvironment) -eq $null)
 {
    write-warning "The specified -OptionalSourceEnvironment could not be found. Specify one of these valid environments."
-   $OptionalSourceEnvironment = (Get-AzureRMEnvironment | Select-Object Name, ManagementPortalUrl | Out-GridView -title "Select a valid Azure environment for your source subscription" -OutputMode Single).Name
+   $OptionalSourceEnvironment = (Get-AzEnvironment | Select-Object Name, ManagementPortalUrl | Out-GridView -title "Select a valid Az environment for your source subscription" -OutputMode Single).Name
 }
 
-# get Azure creds for source
-write-host "Enter credentials for the 'source' Azure Subscription..." -f Yellow
+# get Az creds for source
+write-host "Enter credentials for the 'source' Az Subscription..." -f Yellow
 if($OptionalSourceEnvironment)
 {
-   $login= Connect-AzureRmAccount -EnvironmentName $OptionalSourceEnvironment
+   $login= Connect-AzAccount -EnvironmentName $OptionalSourceEnvironment
 }
 else
 {
-   $login= Connect-AzureRmAccount
+   $login= Connect-AzAccount
 }
 
 $loginID = $login.context.account.id
-$sub = Get-AzureRmSubscription
+$sub = Get-AzSubscription
 $SubscriptionId = $sub.Id
 
 # check for multiple subs under same account and force user to pick one
 if($sub.count -gt 1) 
 {
-    $SubscriptionId = (Get-AzureRmSubscription | Select-Object * | Out-GridView -title "Select Target Subscription" -OutputMode Single).Id
-    Select-AzureRmSubscription -SubscriptionId $SubscriptionId | Out-Null
-    $sub = Get-AzureRmSubscription -SubscriptionId $SubscriptionId
+    $SubscriptionId = (Get-AzSubscription | Select-Object * | Out-GridView -title "Select Target Subscription" -OutputMode Single).Id
+    Select-AzSubscription -SubscriptionId $SubscriptionId | Out-Null
+    $sub = Get-AzSubscription -SubscriptionId $SubscriptionId
 }
 
 # check for valid sub
@@ -340,7 +335,7 @@ $SubscriptionName = $sub.Name
 write-host "Logged into $SubscriptionName with subscriptionID $SubscriptionId as $loginID" -f Green
 
 # check for valid source resource group
-if(-not ($sourceResourceGroup = Get-AzureRmResourceGroup  -ResourceGroupName $resourceGroupName)) 
+if(-not ($sourceResourceGroup = Get-AzResourceGroup  -ResourceGroupName $resourceGroupName)) 
 {
    write-warning "The provided resource group $resourceGroupName could not be found. Exiting the script."
    break
@@ -348,22 +343,22 @@ if(-not ($sourceResourceGroup = Get-AzureRmResourceGroup  -ResourceGroupName $re
 
 
 # create export JSON for backup purposes
-$RGexport = Export-AzureRmResourceGroup -ResourceGroupName $resourceGroupName -Path $jsonBackupPath -IncludeParameterDefaultValue -Force -wa SilentlyContinue
+$RGexport = Export-AzResourceGroup -ResourceGroupName $resourceGroupName -Path $jsonBackupPath -IncludeParameterDefaultValue -Force -wa SilentlyContinue
 
 
 
 # get configuration details for different resources
 [string] $location = $sourceResourceGroup.location
-$resourceGroupStorageAccounts = Get-AzureRmStorageAccount -ResourceGroupName $resourceGroupName
-$resourceGroupManagedDisks = Get-AzureRmDisk -ResourceGroupName $resourceGroupName
-$resourceGroupVirtualNetworks = Get-AzureRmVirtualNetwork -ResourceGroupName $resourceGroupName
-$resourceGroupNICs = Get-AzureRmNetworkInterface -ResourceGroupName $resourceGroupName
-$resourceGroupNSGs = Get-AzureRmNetworkSecurityGroup -ResourceGroupName $resourceGroupName
-$resourceGroupAvSets = Get-AzureRmAvailabilitySet -ResourceGroupName $resourceGroupName 
-$resourceGroupVMs = Get-AzureRMVM -ResourceGroupName $resourceGroupName
-$resourceGroupPIPs = Get-AzureRmPublicIpAddress -ResourceGroupName $resourceGroupName
-$resourceGroupNICs = Get-AzureRmNetworkInterface -ResourceGroupName $resourceGroupName
-$resourceGroupLBs = Get-AzureRmLoadBalancer -ResourceGroupName $resourceGroupName
+$resourceGroupStorageAccounts = Get-AzStorageAccount -ResourceGroupName $resourceGroupName
+$resourceGroupManagedDisks = Get-AzDisk -ResourceGroupName $resourceGroupName
+$resourceGroupVirtualNetworks = Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName
+$resourceGroupNICs = Get-AzNetworkInterface -ResourceGroupName $resourceGroupName
+$resourceGroupNSGs = Get-AzNetworkSecurityGroup -ResourceGroupName $resourceGroupName
+$resourceGroupAvSets = Get-AzAvailabilitySet -ResourceGroupName $resourceGroupName 
+$resourceGroupVMs = Get-AzVM -ResourceGroupName $resourceGroupName
+$resourceGroupPIPs = Get-AzPublicIpAddress -ResourceGroupName $resourceGroupName
+$resourceGroupNICs = Get-AzNetworkInterface -ResourceGroupName $resourceGroupName
+$resourceGroupLBs = Get-AzLoadBalancer -ResourceGroupName $resourceGroupName
 if(! $resourceGroupVMs){write-warning "No virtual machines found in resource group $resourceGroupName"}
 
 
@@ -383,7 +378,7 @@ $resourceGroupVMs.datadisknames
 # check to make sure VMs are not running
 write-host "Current status of VMs:" -f DarkGreen
 $resourceGroupVMs | %{
-   $status = ((get-azurermvm -ResourceGroupName $resourceGroupName -Name $_.name -status).Statuses|Where-Object{$_.Code -like 'PowerState*'}).DisplayStatus
+   $status = ((get-Azvm -ResourceGroupName $resourceGroupName -Name $_.name -status).Statuses|Where-Object{$_.Code -like 'PowerState*'}).DisplayStatus
    write-output "$($_.name) status is $status" 
    if($status -eq 'VM running'){write-warning "All virtual machines in this resource group are not stopped.  Please stop all VMs and try again"; break}
 }
@@ -438,7 +433,7 @@ foreach($vm in $resourceGroupVMs)
     { 
 
         #Get the SAS URL of the VHD blob and do a copy process to the temp storage account
-        $AccessURI = $md | Grant-AzureRmDiskAccess -Access 'Read' -DurationInSecond 10800
+        $AccessURI = $md | Grant-AzDiskAccess -Access 'Read' -DurationInSecond 10800
         $AccessSAS = $AccessURI.AccessSAS
 
         $PSobjMDstorage = New-Object -TypeName PSObject
@@ -459,12 +454,12 @@ foreach($vm in $resourceGroupVMs)
 foreach($sourceStorageAccount in $resourceGroupStorageAccounts)
 { 
   $sourceStorageAccountName = $sourceStorageAccount.StorageAccountName
-  $sourceStorageAccountKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $resourceGroupName -Name $sourceStorageAccountName).Value[0]
-  $sourceStorageContext = New-AzureStorageContext -StorageAccountName $sourceStorageAccountName -StorageAccountKey $sourceStorageAccountKey 
-  $sourceStorageContainers = Get-AzureStorageContainer -Context $sourceStorageContext
+  $sourceStorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $resourceGroupName -Name $sourceStorageAccountName).Value[0]
+  $sourceStorageContext = New-AzStorageContext -StorageAccountName $sourceStorageAccountName -StorageAccountKey $sourceStorageAccountKey 
+  $sourceStorageContainers = Get-AzStorageContainer -Context $sourceStorageContext
   foreach($container in $sourceStorageContainers)
   {
-    $blobs = Get-AzureStorageBlob -Container $container.name -Context $sourceStorageContext
+    $blobs = Get-AzStorageBlob -Container $container.name -Context $sourceStorageContext
 
     foreach($blob in $blobs) 
     {
@@ -498,43 +493,43 @@ $sourceStorageObjects.srcURI
 ##############################################################>
 
 
-# get Azure creds for target subscription
+# get Az creds for target subscription
 $login = $null
 $sub = $null
 $SourceSubscriptionID = $subscriptionID
 $subscriptionID = $null
 
 # Verify specified Environment
-if($OptionalTargetEnvironment -and (Get-AzureRMEnvironment -Name $OptionalTargetEnvironment) -eq $null)
+if($OptionalTargetEnvironment -and (Get-AzEnvironment -Name $OptionalTargetEnvironment) -eq $null)
 {
    write-warning "The specified -OptionalTargetEnvironment could not be found. Select one of these valid environments."
-   $OptionalTargetEnvironment = (Get-AzureRMEnvironment | Select-Object Name, ManagementPortalUrl | Out-GridView -title "Select a valid Azure environment for your target subscription" -OutputMode Single).Name
+   $OptionalTargetEnvironment = (Get-AzEnvironment | Select-Object Name, ManagementPortalUrl | Out-GridView -title "Select a valid Az environment for your target subscription" -OutputMode Single).Name
 }
 
-write-host "Disconnecting from the 'source' Azure Subscription..." -f Yellow
-Disconnect-AzureRmAccount -Username $loginID | Out-Null
+write-host "Disconnecting from the 'source' Az Subscription..." -f Yellow
+Disconnect-AzAccount -Username $loginID | Out-Null
 
-# get Azure creds for target
-write-host "Enter credentials for the 'target' Azure Subscription..." -f Yellow
+# get Az creds for target
+write-host "Enter credentials for the 'target' Az Subscription..." -f Yellow
 if($OptionalTargetEnvironment)
 {
-   $login= Connect-AzureRmAccount -EnvironmentName $OptionalTargetEnvironment
+   $login= Connect-AzAccount -EnvironmentName $OptionalTargetEnvironment
 }
 else
 {
-   $login= Connect-AzureRmAccount 
+   $login= Connect-AzAccount 
 }
 
 $loginID = $login.context.account.id
-$sub = Get-AzureRmSubscription 
+$sub = Get-AzSubscription 
 $SubscriptionId = $sub.Id
 
 # check for multiple subs under same account and force user to pick one
 if($sub.count -gt 1) 
 {
-    $SubscriptionId = (Get-AzureRmSubscription | Select-Object * | Out-GridView -title "Select Target Subscription" -OutputMode Single).Id
-    Select-AzureRmSubscription -SubscriptionId $SubscriptionId| Out-Null
-    $sub = Get-AzureRmSubscription -SubscriptionId $SubscriptionId
+    $SubscriptionId = (Get-AzSubscription | Select-Object * | Out-GridView -title "Select Target Subscription" -OutputMode Single).Id
+    Select-AzSubscription -SubscriptionId $SubscriptionId| Out-Null
+    $sub = Get-AzSubscription -SubscriptionId $SubscriptionId
 }
 
    
@@ -577,11 +572,11 @@ if(! $resume)
 
     Write-Output "Verifying specified location: $location ..."
     # Prompt for location if provided location doesn't exist in current environment.
-    $location = (Get-AzureRMlocation | Where-Object { $_.Providers -eq 'Microsoft.Compute' -and ( $_.DisplayName -like $location -or $_.location -like $location)}).location
+    $location = (Get-Azlocation | Where-Object { $_.Providers -eq 'Microsoft.Compute' -and ( $_.DisplayName -like $location -or $_.location -like $location)}).location
     if(! $location) 
     {
-        write-warning "$OptionalNewLocation is an invalid Azure Resource Group location for this environment.  Please select a valid location and click OK"
-        $location = (Get-AzureRMlocation | Where-Object { $_.Providers -eq 'Microsoft.Compute'} | Select-Object DisplayName, Providers, Location | Out-GridView -Title "Select Azure Resource Group Location" -OutputMode Single).location
+        write-warning "$OptionalNewLocation is an invalid Az Resource Group location for this environment.  Please select a valid location and click OK"
+        $location = (Get-Azlocation | Where-Object { $_.Providers -eq 'Microsoft.Compute'} | Select-Object DisplayName, Providers, Location | Out-GridView -Title "Select Az Resource Group Location" -OutputMode Single).location
     }
 
 
@@ -592,7 +587,7 @@ if(! $resume)
     foreach ($vmSize in ($resourceGroupVMs.hardwareprofile.vmsize))
     {
         $cores = $null
-        $cores = (Get-AzureRmVMSize -Location $location | Where-Object{$_.Name -eq $vmSize}).NumberOfCores
+        $cores = (Get-AzVMSize -Location $location | Where-Object{$_.Name -eq $vmSize}).NumberOfCores
         $totalCoresNeeded = $cores + $totalCoresNeeded
     }
 
@@ -632,7 +627,7 @@ if(! $resume)
         $RGexists = $null
         try
         {
-            $RGexists = Get-AzureRmResourceGroup -Name $ResourceGroupName -ea stop
+            $RGexists = Get-AzResourceGroup -Name $ResourceGroupName -ea stop
         }
         catch{}
         
@@ -648,7 +643,7 @@ if(! $resume)
     try
     {
         write-verbose "Creating new resource group $resourceGroupName in $location" -Verbose
-        $NewResourceGroup  = New-AzureRmResourceGroup -Name $ResourceGroupName -Location $location -ea Stop -wa SilentlyContinue
+        $NewResourceGroup  = New-AzResourceGroup -Name $ResourceGroupName -Location $location -ea Stop -wa SilentlyContinue
         write-output "The new resource group $resourceGroupName was created in subscription $SubscriptionName"
     }
     catch
@@ -761,7 +756,7 @@ if(! $resume)
             {
                 # create new storage account
                 write-verbose "Creating storage account $DeststorageAccountName in resource group $resourceGroupName at location $location" -verbose
-                $newStorageAccount = New-AzureRmStorageAccount @storageParams -ea Stop -wa SilentlyContinue 
+                $newStorageAccount = New-AzStorageAccount @storageParams -ea Stop -wa SilentlyContinue 
                 write-output "The storage account $DeststorageAccountName was created"
             }
             catch
@@ -777,8 +772,8 @@ if(! $resume)
         try 
         {
             # get key and storage context of newly created storage account
-            $DestStorageAccountKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $resourceGroupName -Name $DestStorageAccountName -ea Stop).Value[0] 
-            $DestStorageContext = New-AzureStorageContext -StorageAccountName $DestStorageAccountName -StorageAccountKey $DestStorageAccountKey -ea Stop -wa SilentlyContinue
+            $DestStorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $resourceGroupName -Name $DestStorageAccountName -ea Stop).Value[0] 
+            $DestStorageContext = New-AzStorageContext -StorageAccountName $DestStorageAccountName -StorageAccountKey $DestStorageAccountKey -ea Stop -wa SilentlyContinue
         }
         catch 
         {
@@ -793,8 +788,8 @@ if(! $resume)
         { 
             $srcURI = $obj.srcURI
 
-            copy-azureBlob -srcUri $srcURI -srcContext $obj.SrcStorageContext -destContext $DestStorageContext
-            #copy-azureBlob -srcUri $srcURI -srcContext $obj.SrcStorageContext -destContext $DestStorageContext -containerName 'vhd-backup'
+            copy-AzBlob -srcUri $srcURI -srcContext $obj.SrcStorageContext -destContext $DestStorageContext
+            #copy-AzBlob -srcUri $srcURI -srcContext $obj.SrcStorageContext -destContext $DestStorageContext -containerName 'vhd-backup'
             
             # add srcURI and destination storage account name to custom PSobject
             $PSobjVHDstorage = New-Object -TypeName PSObject
@@ -810,7 +805,7 @@ if(! $resume)
         {
             foreach($obj in $sourceStorageObjects | Where-Object{$_.srcStorageAccount -eq $srcStorageAccount})
             {
-                copy-azureBlob -srcUri $obj.srcURI -srcContext $obj.SrcStorageContext -destContext $DestStorageContext 
+                copy-AzBlob -srcUri $obj.srcURI -srcContext $obj.SrcStorageContext -destContext $DestStorageContext 
             }
         }
 
@@ -849,7 +844,7 @@ if(! $resume)
             {
                 # create new storage account
                 write-verbose "Creating temmporary storage account $tempstorageAccountName in resource group $resourceGroupName at location $location" -verbose
-                $newStorageAccount = New-AzureRmStorageAccount @storageParams -ea Stop -wa SilentlyContinue 
+                $newStorageAccount = New-AzStorageAccount @storageParams -ea Stop -wa SilentlyContinue 
                 write-output "The storage account $tempstorageAccountName was created"
             }
             catch
@@ -865,9 +860,9 @@ if(! $resume)
         try 
         {
             # get key and storage context of newly created storage account
-            $tempStorageAccountKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $resourceGroupName -Name $tempStorageAccountName -ea Stop).Value[0] 
-            $tempStorageContext = New-AzureStorageContext -StorageAccountName $tempStorageAccountName -StorageAccountKey $tempStorageAccountKey -ea Stop -wa SilentlyContinue
-            $tempContainer = New-AzureStorageContainer -Name 'vhdblobs' -Context $tempStorageContext -Permission Blob  -ea Stop -wa SilentlyContinue
+            $tempStorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $resourceGroupName -Name $tempStorageAccountName -ea Stop).Value[0] 
+            $tempStorageContext = New-AzStorageContext -StorageAccountName $tempStorageAccountName -StorageAccountKey $tempStorageAccountKey -ea Stop -wa SilentlyContinue
+            $tempContainer = New-AzStorageContainer -Name 'vhdblobs' -Context $tempStorageContext -Permission Blob  -ea Stop -wa SilentlyContinue
         }
         catch 
         {
@@ -886,7 +881,7 @@ if(! $resume)
         # $srcMDid = $md.id
         # $srcOStype = $md.OsType
 
-        $rtn = Start-AzureStorageBlobCopy -AbsoluteUri $AccessSAS -DestBlob $srcMDname -DestContainer $tempContainer.Name -destContext $tempStorageContext
+        $rtn = Start-AzStorageBlobCopy -AbsoluteUri $AccessSAS -DestBlob $srcMDname -DestContainer $tempContainer.Name -destContext $tempStorageContext
         $PSobjVHDstorage = New-Object -TypeName PSObject
         $PSobjVHDstorage | Add-Member -MemberType NoteProperty -Name srcName -Value $srcMDname 
         $PSobjVHDstorage | Add-Member -MemberType NoteProperty -Name destStorageContext -Value $tempStorageContext 
@@ -930,14 +925,14 @@ if(! $resume)
                 $nsgRuleParams.Add("Description", $nsgRule.Description)
             }
 
-           $nsgRules += New-AzureRmNetworkSecurityRuleConfig @nsgRuleParams
+           $nsgRules += New-AzNetworkSecurityRuleConfig @nsgRuleParams
         }
     
 
         try
         {
             write-verbose "Creating Network Security Group $nsgName in resource group $resourceGroupName at location $location" -verbose
-           $NSG = New-AzureRmNetworkSecurityGroup -Name $nsgName -SecurityRules $nsgRules  -ResourceGroupName $ResourceGroupName -Location $location  -ea Stop -wa SilentlyContinue
+           $NSG = New-AzNetworkSecurityGroup -Name $nsgName -SecurityRules $nsgRules  -ResourceGroupName $ResourceGroupName -Location $location  -ea Stop -wa SilentlyContinue
             Write-Output "Network Security Group $nsgName was created"
         }
         catch
@@ -959,7 +954,7 @@ if(! $resume)
         try
         {
             write-verbose "Creating virtual network $destVNname in resource group $resourceGroupName at location $location" -verbose
-            $newVirtualNetwork = New-AzureRmVirtualNetwork -Name $destVNname -ResourceGroupName $resourceGroupName -Location $location -AddressPrefix $destAddressPrefix -DnsServer $destDNSserver -Subnet $destSubnets -Force -ea Stop -wa SilentlyContinue
+            $newVirtualNetwork = New-AzVirtualNetwork -Name $destVNname -ResourceGroupName $resourceGroupName -Location $location -AddressPrefix $destAddressPrefix -DnsServer $destDNSserver -Subnet $destSubnets -Force -ea Stop -wa SilentlyContinue
             Write-Output "Virtual Network $destVNname was created"
         }
         catch
@@ -977,9 +972,9 @@ if(! $resume)
                 {
                     $NSGsplit = $destSub.Subnets.NetworkSecurityGroup.id.split('/')
                     $srcNSGname = $NSGsplit[$NSGsplit.Length -1]
-                    $NSG = Get-AzureRmNetworkSecurityGroup -Name $srcNSGname -ResourceGroupName $ResourceGroupName -ea Stop
-                    $subnet = $newVirtualNetwork | Get-AzureRmVirtualNetworkSubnetConfig  -Name $destSub.Name -ea Stop -wa SilentlyContinue
-                    Set-AzureRmVirtualNetworkSubnetConfig -VirtualNetwork $newVirtualNetwork -Name $destSub.Name -AddressPrefix $subnet.AddressPrefix -NetworkSecurityGroup $NSG | Set-AzureRmVirtualNetwork -ea Stop | out-null
+                    $NSG = Get-AzNetworkSecurityGroup -Name $srcNSGname -ResourceGroupName $ResourceGroupName -ea Stop
+                    $subnet = $newVirtualNetwork | Get-AzVirtualNetworkSubnetConfig  -Name $destSub.Name -ea Stop -wa SilentlyContinue
+                    Set-AzVirtualNetworkSubnetConfig -VirtualNetwork $newVirtualNetwork -Name $destSub.Name -AddressPrefix $subnet.AddressPrefix -NetworkSecurityGroup $NSG | Set-AzVirtualNetwork -ea Stop | out-null
                 }
                 catch
                 {
@@ -1013,7 +1008,7 @@ if(! $resume)
         try
         {
             write-verbose "Creating availability set $AVname in resource group $resourceGroupName at location $location" -verbose
-            $NewAvailabilitySet = New-AzureRmAvailabilitySet @avParams 
+            $NewAvailabilitySet = New-AzAvailabilitySet @avParams 
             Write-Output "Availability Set $AVname was created"
         }
         catch
@@ -1051,7 +1046,7 @@ if(! $resume)
         try
         {
             write-verbose "Creating public IP $pipName in resource group $resourceGroupName at location $location" -verbose
-            $PIP = New-AzureRmPublicIpAddress @pipParams
+            $PIP = New-AzPublicIpAddress @pipParams
             Write-Output "Public IP $pipName was created with DomainName Label $NewPipDomainNameLabel"
         }
         catch
@@ -1097,8 +1092,8 @@ if(! $resume)
                 $vnet = $null
                 try
                 {
-                  $vnet = Get-AzureRmVirtualNetwork -name $vnetName -ResourceGroupName $resourceGroupName -ea Stop -wa SilentlyContinue
-                  $subnet = $vnet | Get-AzureRmVirtualNetworkSubnetConfig  -Name $subnetName -ea Stop -wa SilentlyContinue
+                  $vnet = Get-AzVirtualNetwork -name $vnetName -ResourceGroupName $resourceGroupName -ea Stop -wa SilentlyContinue
+                  $subnet = $vnet | Get-AzVirtualNetworkSubnetConfig  -Name $subnetName -ea Stop -wa SilentlyContinue
                 }
                 catch{}
 
@@ -1113,7 +1108,7 @@ if(! $resume)
             
                 try
                 {
-                  $lbPubIP = Get-AzureRmPublicIpAddress -Name $lbPubIPName -ResourceGroupName $resourceGroupName -ea Stop -wa SilentlyContinue
+                  $lbPubIP = Get-AzPublicIpAddress -Name $lbPubIPName -ResourceGroupName $resourceGroupName -ea Stop -wa SilentlyContinue
                 }
                 catch{}
                 
@@ -1133,7 +1128,7 @@ if(! $resume)
             try
               {
                 write-verbose "Adding IP config $LBipConfigName to load balancer $lbName" -verbose
-                $newLBipConfig = New-AzureRmLoadBalancerFrontendIpConfig @lbConfigParams -ea Stop -wa SilentlyContinue 
+                $newLBipConfig = New-AzLoadBalancerFrontendIpConfig @lbConfigParams -ea Stop -wa SilentlyContinue 
                 Write-Output "IP config $LBipConfigName for $lbName was added"
               }
               catch
@@ -1169,7 +1164,7 @@ if(! $resume)
                         $inboundNatRuleParams.Add("EnableFloatingIP", $null)
                     }
                     
-                    $newNatRuleConfig = New-AzureRmLoadBalancerInboundNatRuleConfig @inboundNatRuleParams  
+                    $newNatRuleConfig = New-AzLoadBalancerInboundNatRuleConfig @inboundNatRuleParams  
                         
                     if($newNatRuleConfig)
                     {
@@ -1206,7 +1201,7 @@ if(! $resume)
         try
         {
             write-verbose "Creating load balancer $LBName in resource group $resourceGroupName at location $location" -verbose
-            $NewLB = New-AzureRmLoadBalancer @LBparams -ea Stop -wa SilentlyContinue
+            $NewLB = New-AzLoadBalancer @LBparams -ea Stop -wa SilentlyContinue
             Write-Output "Load balancer $LBName was created"
         }
         catch
@@ -1219,33 +1214,33 @@ if(! $resume)
             
         if($LBBackendAddressPool -and $NewLB) 
         {
-            $NewLB | Add-AzureRmLoadBalancerBackendAddressPoolConfig -Name $LBBackendAddressPool.Name -ea Stop -wa SilentlyContinue | out-null
+            $NewLB | Add-AzLoadBalancerBackendAddressPoolConfig -Name $LBBackendAddressPool.Name -ea Stop -wa SilentlyContinue | out-null
         }
         
         if($LBProbe -and $NewLB) 
         {
             # TODO:        
-            #   $NewLB | Add-AzureRmLoadBalancerProbeConfig -Name $LBProbe.Name  -RequestPath -Protocol -Port -IntervalInSeconds -ProbeCount | out-null
+            #   $NewLB | Add-AzLoadBalancerProbeConfig -Name $LBProbe.Name  -RequestPath -Protocol -Port -IntervalInSeconds -ProbeCount | out-null
         }
         
             
         if($LoadBalancingRule -and $NewLB) 
         {
             # TODO:
-            #$NewLB | Add-AzureRmLoadBalancerRuleConfig -Name $LoadBalancingRule.Name -ea Stop -wa SilentlyContinue | out-null
+            #$NewLB | Add-AzLoadBalancerRuleConfig -Name $LoadBalancingRule.Name -ea Stop -wa SilentlyContinue | out-null
         }
 
         if($LBInboundNatPool -and $NewLB) 
         {
             # TODO:
-            # $NewLB |Add-AzureRmLoadBalancerInboundNatPoolConfig -Name $LBInboundNatPool.Name  -ea Stop -wa SilentlyContinue | out-null
+            # $NewLB |Add-AzLoadBalancerInboundNatPoolConfig -Name $LBInboundNatPool.Name  -ea Stop -wa SilentlyContinue | out-null
         }  
             
         if($NewLB) 
         {    
             try
             {
-                $NewLB | Set-AzureRmLoadBalancer -ea Stop -wa SilentlyContinue | out-null
+                $NewLB | Set-AzLoadBalancer -ea Stop -wa SilentlyContinue | out-null
             }
             catch
             {
@@ -1284,8 +1279,8 @@ if(! $resume)
                 $vnet = $null
                 try
                 {
-                    $vnet = Get-AzureRmVirtualNetwork -name $vnetName -ResourceGroupName $resourceGroupName -ea Stop -wa SilentlyContinue
-                    $subnet = $vnet | Get-AzureRmVirtualNetworkSubnetConfig  -Name $subnetName -ea Stop -wa SilentlyContinue
+                    $vnet = Get-AzVirtualNetwork -name $vnetName -ResourceGroupName $resourceGroupName -ea Stop -wa SilentlyContinue
+                    $subnet = $vnet | Get-AzVirtualNetworkSubnetConfig  -Name $subnetName -ea Stop -wa SilentlyContinue
                
                 }
                 catch{}
@@ -1308,7 +1303,7 @@ if(! $resume)
             {
                 $ipipsplit = $ipConfig.PublicIpAddress.id.split('/')
                 $ipipName = $ipipsplit[$ipipsplit.Length -1]
-                $PublicIP = Get-AzureRmPublicIpAddress -Name $ipipName -ResourceGroupName $ResourceGroupName
+                $PublicIP = Get-AzPublicIpAddress -Name $ipipName -ResourceGroupName $ResourceGroupName
                 $ipConfigParams.Add("PublicIpAddress", $PublicIP)
             }
 
@@ -1320,8 +1315,8 @@ if(! $resume)
                 $lbName = $lbbesplit[$lbbesplit.Length -3]
                 try
                 {
-                $lb = Get-AzureRmLoadBalancer -name $lbName -ResourceGroupName $resourceGroupName -ea Stop -wa SilentlyContinue
-                    $lbbe = $lb | Get-AzureRmLoadBalancerBackendAddressPoolConfig -Name $lbbeName -ea Stop -wa SilentlyContinue
+                $lb = Get-AzLoadBalancer -name $lbName -ResourceGroupName $resourceGroupName -ea Stop -wa SilentlyContinue
+                    $lbbe = $lb | Get-AzLoadBalancerBackendAddressPoolConfig -Name $lbbeName -ea Stop -wa SilentlyContinue
                 }
                 catch{}
                 
@@ -1336,8 +1331,8 @@ if(! $resume)
                 $lbName = $lbINRsplit[$lbINRsplit.Length -3]
                 try
                 {
-                    $lb = Get-AzureRmLoadBalancer -name $lbName -ResourceGroupName $resourceGroupName -ea Stop -wa SilentlyContinue
-                    $lbINR = $lb | Get-AzureRmLoadBalancerInboundNatRuleConfig -Name $lbINRName -ea Stop -wa SilentlyContinue
+                    $lb = Get-AzLoadBalancer -name $lbName -ResourceGroupName $resourceGroupName -ea Stop -wa SilentlyContinue
+                    $lbINR = $lb | Get-AzLoadBalancerInboundNatRuleConfig -Name $lbINRName -ea Stop -wa SilentlyContinue
                 }
                 catch{}
             
@@ -1356,7 +1351,7 @@ if(! $resume)
             try
             {
                 write-verbose "Adding IP config $ipConfigName to network interface $NicName" -verbose
-                $NewIpConfig = New-AzureRmNetworkInterfaceIpConfig @ipConfigParams -ea Stop -wa SilentlyContinue 
+                $NewIpConfig = New-AzNetworkInterfaceIpConfig @ipConfigParams -ea Stop -wa SilentlyContinue 
                 [array]$NewIpConfigs +=  $NewIpConfig                
                 Write-Output "IP config $ipConfigName for $NicName was added"
             }
@@ -1370,7 +1365,7 @@ if(! $resume)
 
         if(! $NewIpConfigs)
         {
-            $NewIpConfigs = New-AzureRmNetworkInterfaceIpConfig -Name 'empty'
+            $NewIpConfigs = New-AzNetworkInterfaceIpConfig -Name 'empty'
         }
         
         $NICparams = @{
@@ -1395,7 +1390,7 @@ if(! $resume)
             
             try
             { 
-                $newNSG = Get-AzureRmNetworkSecurityGroup -Name $srcNSGname -ResourceGroupName $ResourceGroupName
+                $newNSG = Get-AzNetworkSecurityGroup -Name $srcNSGname -ResourceGroupName $ResourceGroupName
                 $NICparams.Add("NetworkSecurityGroup", $newNSG)
             }
             catch
@@ -1415,7 +1410,7 @@ if(! $resume)
         try
         {
             write-verbose "Creating network interface $NicName in resource group $resourceGroupName at location $location" -verbose
-            $NewNIC = New-AzureRmNetworkInterface @NICparams -ea Stop -wa SilentlyContinue
+            $NewNIC = New-AzNetworkInterface @NICparams -ea Stop -wa SilentlyContinue
             Write-Output "Network interface $NicName was created"
         }
         catch
@@ -1452,7 +1447,7 @@ if(! $resume)
 
         $VHDstorageObjects | Select-Object -Property destStorageContext -Unique | %{
     
-            $containers = Get-AzureStorageContainer -Context $_.destStorageContext 
+            $containers = Get-AzStorageContainer -Context $_.destStorageContext 
             
             foreach($container in $containers)
             {
@@ -1467,7 +1462,7 @@ else # if not resume
 {
 
     # check for valid source resource group
-    if(-not ($targetResourceGroup = Get-AzureRmResourceGroup  -ResourceGroupName $resourceGroupName)) 
+    if(-not ($targetResourceGroup = Get-AzResourceGroup  -ResourceGroupName $resourceGroupName)) 
     {
        write-warning "The provided resource group $resourceGroupName could not be found. Exiting the script."
        break
@@ -1509,11 +1504,11 @@ if($resourceGroupVMs.storageprofile.osdisk.manageddisk -and $location -ne $srcLo
         {
             $tempStorageContext =  $mdObj.destStorageContext 
             $tempStorageAccountName = $tempStorageContext.StorageAccountName
-            $StorageAccountKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $resourceGroupName -Name $tempStorageAccountName).Value[0]
-            $tempStorageContext = New-AzureStorageContext -StorageAccountName $tempStorageAccountName -StorageAccountKey $StorageAccountKey
+            $StorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $resourceGroupName -Name $tempStorageAccountName).Value[0]
+            $tempStorageContext = New-AzStorageContext -StorageAccountName $tempStorageAccountName -StorageAccountKey $StorageAccountKey
         }
         
-        $mdTempContainerName = (Get-AzureStorageContainer -Context $tempStorageContext).Name
+        $mdTempContainerName = (Get-AzStorageContainer -Context $tempStorageContext).Name
         $srcMDuri = $mdObj.srcURI
         $srcMDname = $mdObj.srcName
         $srcSkuName = $mdObj.srcSkuName
@@ -1523,8 +1518,8 @@ if($resourceGroupVMs.storageprofile.osdisk.manageddisk -and $location -ne $srcLo
         write-verbose "Creating new managed disk $srcMDname in $location" -Verbose
         try
         {
-            $mdiskconfig = New-AzureRmDiskConfig -SkuName $srcSkuName -Location $location  -CreateOption Import -SourceUri $srcMDuri 
-            $newMDdisk = New-AzureRmDisk -ResourceGroupName $resourceGroupName -Disk $mdiskconfig -DiskName $srcMDname 
+            $mdiskconfig = New-AzDiskConfig -SkuName $srcSkuName -Location $location  -CreateOption Import -SourceUri $srcMDuri 
+            $newMDdisk = New-AzDisk -ResourceGroupName $resourceGroupName -Disk $mdiskconfig -DiskName $srcMDname 
             write-output "The managed disk $srcMDname was created."
         }
         catch
@@ -1537,7 +1532,7 @@ if($resourceGroupVMs.storageprofile.osdisk.manageddisk -and $location -ne $srcLo
 
     #cleanup
     write-verbose "All managed disks have been created. Removing temporary storage account $tempStorageAccountName" -Verbose
-    Remove-AzureRmStorageAccount -ResourceGroupName $ResourceGroupName -Name $tempStorageAccountName -Force | out-null
+    Remove-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $tempStorageAccountName -Force | out-null
     Write-output "The storage account $tempStorageAccountName was removed" 
   
 }
@@ -1571,16 +1566,16 @@ foreach($srcVM in $resourceGroupVMs)
     {
         $avSetRef = ($srcVM.AvailabilitySetReference.id).Split('/')
         $avSetName = $avSetRef[($avSetRef.count -1)]
-        $AvailabilitySet = Get-AzureRmAvailabilitySet -ResourceGroupName $ResourceGroupName -Name $avSetName
+        $AvailabilitySet = Get-AzAvailabilitySet -ResourceGroupName $ResourceGroupName -Name $avSetName
     }
 
     Write-Output "Verifying specified VM Size of $vmSize for location $location ..."
     # Prompt for to select new if doesn't exist in current environment.
     $savedVMSize = $vmSize 
-    if($vmSize  -and (Get-AzureRmVMSize -Location $Location).name -notcontains $vmSize) 
+    if($vmSize  -and (Get-AzVMSize -Location $Location).name -notcontains $vmSize) 
     {
-      write-warning "$savedVMSize is an invalid Azure Virtual Machine Size for this location in this environment.  Please select a valid VM Size and click OK"
-      $vmSize = (Get-AzureRmVMSize -Location $Location | Select-Object Name, NumberOfCores, MemoryInMB, MaxDataDiskCount | Out-GridView -Title "Select Azure VM Size" -OutputMode Single).Name
+      write-warning "$savedVMSize is an invalid Az Virtual Machine Size for this location in this environment.  Please select a valid VM Size and click OK"
+      $vmSize = (Get-AzVMSize -Location $Location | Select-Object Name, NumberOfCores, MemoryInMB, MaxDataDiskCount | Out-GridView -Title "Select Az VM Size" -OutputMode Single).Name
     }
    
    
@@ -1599,8 +1594,8 @@ foreach($srcVM in $resourceGroupVMs)
         if($resume)
         {
         $osStorageAccountName = $OSstorageContext.StorageAccountName
-        $StorageAccountKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $resourceGroupName -Name $osStorageAccountName).Value[0]
-        $OSstorageContext = New-AzureStorageContext -StorageAccountName $osStorageAccountName -StorageAccountKey $StorageAccountKey
+        $StorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $resourceGroupName -Name $osStorageAccountName).Value[0]
+        $OSstorageContext = New-AzStorageContext -StorageAccountName $osStorageAccountName -StorageAccountKey $StorageAccountKey
         }
         
         # set the OSdisk URI
@@ -1616,18 +1611,18 @@ foreach($srcVM in $resourceGroupVMs)
     {
         $NICRef = $nicID.Split('/')
         $NICName = $NICRef[($NICRef.count -1)]
-        $newNICs += Get-AzureRmNetworkInterface -Name $NICName -ResourceGroupName $ResourceGroupName 
+        $newNICs += Get-AzNetworkInterface -Name $NICName -ResourceGroupName $ResourceGroupName 
     }
     
     
     # create VM Config
     if($AvailabilitySet)
     {
-        $VirtualMachine = New-AzureRmVMConfig -VMName $VMName -VMSize $VMSize  -AvailabilitySetID $AvailabilitySet.Id  -wa SilentlyContinue
+        $VirtualMachine = New-AzVMConfig -VMName $VMName -VMSize $VMSize  -AvailabilitySetID $AvailabilitySet.Id  -wa SilentlyContinue
     }
     else
     {
-        $VirtualMachine = New-AzureRmVMConfig -VMName $VMName -VMSize $VMSize -wa SilentlyContinue 
+        $VirtualMachine = New-AzVMConfig -VMName $VMName -VMSize $VMSize -wa SilentlyContinue 
     }
     
     if($srcVM.storageprofile.osdisk.vhd)
@@ -1635,33 +1630,33 @@ foreach($srcVM in $resourceGroupVMs)
        # Set OS Disk based on OS type
         if($OStype -eq 'Windows' -or $OStype -eq '0')
         {
-            $VirtualMachine = Set-AzureRmVMOSDisk -VM $VirtualMachine -Name $OSDiskName -VhdUri $OSDiskUri -Caching $OSDiskCaching -CreateOption $createOption -Windows
+            $VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -Name $OSDiskName -VhdUri $OSDiskUri -Caching $OSDiskCaching -CreateOption $createOption -Windows
         }
         else
         {
-            $VirtualMachine = Set-AzureRmVMOSDisk -VM $VirtualMachine -Name $OSDiskName -VhdUri $OSDiskUri -Caching $OSDiskCaching -CreateOption $createOption -Linux
+            $VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -Name $OSDiskName -VhdUri $OSDiskUri -Caching $OSDiskCaching -CreateOption $createOption -Linux
         }
     }
     elseif($srcVM.storageprofile.osdisk.manageddisk)
     {
-        $osMDisk = Get-AzureRmDisk -DiskName $OSDiskName -ResourceGroupName $resourceGroupName
+        $osMDisk = Get-AzDisk -DiskName $OSDiskName -ResourceGroupName $resourceGroupName
         $osDiskId = $osMDisk.id
         $osDiskSkuName= $osMDisk.Sku.Name
 
         if($OStype -eq 'Windows' -or $OStype -eq '0')
         {
-            $VirtualMachine = Set-AzureRmVMOSDisk -VM $VirtualMachine -Name $OSDiskName -ManagedDiskId $osDiskId -StorageAccountType $osDiskSkuName -Caching $OSDiskCaching -CreateOption $createOption -Windows
+            $VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -Name $OSDiskName -ManagedDiskId $osDiskId -StorageAccountType $osDiskSkuName -Caching $OSDiskCaching -CreateOption $createOption -Windows
         }
         else
         {
-            $VirtualMachine = Set-AzureRmVMOSDisk -VM $VirtualMachine -Name $OSDiskName -ManagedDiskId $osDiskId -StorageAccountType $osDiskSkuName -Caching $OSDiskCaching -CreateOption $createOption -Linux
+            $VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -Name $OSDiskName -ManagedDiskId $osDiskId -StorageAccountType $osDiskSkuName -Caching $OSDiskCaching -CreateOption $createOption -Linux
         }
     }
 
       # add NICs
     foreach($NIC in $newNICs)
     {
-        $VirtualMachine = Add-AzureRmVMNetworkInterface -VM $VirtualMachine -Id $NIC.Id
+        $VirtualMachine = Add-AzVMNetworkInterface -VM $VirtualMachine -Id $NIC.Id
     }
 
 
@@ -1691,8 +1686,8 @@ foreach($srcVM in $resourceGroupVMs)
                 if($resume)
                 {
                     $diskStorageAccountName = $diskStorageContext.StorageAccountName
-                    $StorageAccountKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $resourceGroupName -Name $diskStorageAccountName).Value[0]
-                    $diskStorageContext = New-AzureStorageContext -StorageAccountName $diskStorageAccountName -StorageAccountKey $StorageAccountKey
+                    $StorageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $resourceGroupName -Name $diskStorageAccountName).Value[0]
+                    $diskStorageContext = New-AzStorageContext -StorageAccountName $diskStorageAccountName -StorageAccountKey $StorageAccountKey
                 }
 
                 $dataDiskUri = "$($diskStorageContext.BlobEndPoint)$diskContainerName/$diskBlobName"
@@ -1705,16 +1700,16 @@ foreach($srcVM in $resourceGroupVMs)
             # determine if managed disk are used and use apppropiate attach method 
 	        if($disk.vhd)
             {
-                Add-AzureRmVMDataDisk -VM $VirtualMachine -Name $dataDiskName -DiskSizeInGB $DiskSizeGB -Lun $dataDiskLUN -VhdUri $dataDiskUri -Caching $diskCaching -CreateOption $CreateOption | out-null
+                Add-AzVMDataDisk -VM $VirtualMachine -Name $dataDiskName -DiskSizeInGB $DiskSizeGB -Lun $dataDiskLUN -VhdUri $dataDiskUri -Caching $diskCaching -CreateOption $CreateOption | out-null
             }
             elseif($disk.manageddisk)
             {
-                $mdDataDisk = Get-AzureRmDisk -ResourceGroupName $resourceGroupName -DiskName $dataDiskName
+                $mdDataDisk = Get-AzDisk -ResourceGroupName $resourceGroupName -DiskName $dataDiskName
                  # Write-Host ('Disk Provisioning State -> [ ' + ($mdDataDisk.ProvisioningState) + ' ]')
                  $dataDiskId = $mdDataDisk.id
                  $dataDiskSku = $mdDataDisk.sku.Name
 
-                Add-AzureRmVMDataDisk -VM $VirtualMachine -Name $dataDiskName -Lun $dataDiskLUN -ManagedDiskId $dataDiskId -StorageAccountType $dataDiskSku -Caching $diskCaching -CreateOption $CreateOption | out-null
+                Add-AzVMDataDisk -VM $VirtualMachine -Name $dataDiskName -Lun $dataDiskLUN -ManagedDiskId $dataDiskId -StorageAccountType $dataDiskSku -Caching $diskCaching -CreateOption $CreateOption | out-null
             }        
         }
     }
@@ -1725,7 +1720,7 @@ foreach($srcVM in $resourceGroupVMs)
         
         write-verbose "Creating Virtual Machine $VMName in resource group $resourceGroupName at location $location" -verbose
        # $VirtualMachine
-        New-AzureRmVM -ResourceGroupName $ResourceGroupName -Location $location -VM $VirtualMachine -ea Stop -wa SilentlyContinue | out-null
+        New-AzVM -ResourceGroupName $ResourceGroupName -Location $location -VM $VirtualMachine -ea Stop -wa SilentlyContinue | out-null
         write-output "Successfully created Virtual Machine $VMName"
     }
     catch
